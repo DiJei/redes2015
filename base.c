@@ -207,7 +207,6 @@ int main (int argc, char **argv) {
                
                getTemperatura(temp);
                sprintf(tempsp, "%s-http://www.estacao.iag.usp.br/\n",temp);
-               printf("%s\n",tempsp);
                write(connfd, tempsp, strlen(tempsp));
                for (x = 0; x < strlen(tempsp); x++)
                  data[x] = 0;
@@ -261,15 +260,10 @@ void getTemperatura(char temp[]) {
     int x;
     for (x = 0; x < 7; x++) temp[x] = 0;
     FILE *file;
-    printf("FOI\n");
     system("GET http://www.estacao.iag.usp.br/ | grep \"temp\" > temp.txt");
-    printf("FOI\n");
     file = fopen("temp.txt","r");
-    printf("FOI\n");
     fgets(http,28,file);
     strncat(temp, http + 19, 7);
-    printf("FOI\n");
     fclose(file);
-    printf("FOI\n");
-    system("rm file.txt");
+    system("rm temp.txt");
 }
