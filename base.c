@@ -57,10 +57,11 @@ typedef struct no node;
 /*----------------------------------------------------*/
 
 
-void insert_client(node *p,char *pass,char *nick, char *server);
-int check_nick(node *p, char *pass);
+void insert_client(node *p,char *nick);
+int check_nick(node *p, char *nick);
 void getTemperatura(char temp[]);
-
+void imprime_cliente(node *p);
+void update_client(node *p, FILE *client);
 
 
 
@@ -74,6 +75,7 @@ int main (int argc, char **argv) {
    /* Retorno da fun��o fork para saber quem � o processo filho e quem
     * � o processo pai */
    pid_t childpid;
+   
    /* Armazena linhas recebidas do cliente */
 	char	recvline[MAXLINE + 1];
    /* Armazena o tamanho da string lida do cliente */
@@ -94,40 +96,31 @@ int main (int argc, char **argv) {
    char tempsp[39];
    char http[28];
    //------------
-
+   
+   FILE *client;
    /*Fila de usuarios*/
-   node *fila;
-   fila = malloc(sizeof(node));
-   fila->prox = NULL;
+   node *fila_client;
+   fila_client = malloc(sizeof(node));
+   fila_client->prox = NULL;
    char entrada[30];
-
+   int len;
   if (argc != 2) {
       fprintf(stderr,"Uso: %s <Porta>\n",argv[0]);
       fprintf(stderr,"Vai rodar um servidor de echo na porta <Porta> TCP\n");
 		exit(1);
 	}
+  
 
-   /* Cria��o de um socket. Eh como se fosse um descritor de arquivo. Eh
-    * possivel fazer operacoes como read, write e close. Neste
-    * caso o socket criado eh um socket IPv4 (por causa do AF_INET),
-    * que vai usar TCP (por causa do SOCK_STREAM), j� que o IRC
-    * funciona sobre TCP, e ser� usado para uma aplica��o convencional sobre
-    * a Internet (por causa do n�mero 0) */
+  /*Cria arquivo com informacoes com clientes*/
+  client = fopen("cliente_log.txt","w");
+
+  
 	if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
 		perror("socket :(\n");
 		exit(2);
 	}
 
-   /* Agora � necess�rio informar os endere�os associados a este
-    * socket. � necess�rio informar o endere�o / interface e a porta,
-    * pois mais adiante o socket ficar� esperando conex�es nesta porta
-    * e neste(s) endere�os. Para isso � necess�rio preencher a struct
-    * servaddr. � necess�rio colocar l� o tipo de socket (No nosso
-    * caso AF_INET porque � IPv4), em qual endere�o / interface ser�o
-    * esperadas conex�es (Neste caso em qualquer uma -- INADDR_ANY) e
-    * qual a porta. Neste caso ser� a porta que foi passada como
-    * argumento no shell (atoi(argv[1]))
-    */
+
 	bzero(&servaddr, sizeof(servaddr));
 	servaddr.sin_family      = AF_INET;
 	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -137,10 +130,7 @@ int main (int argc, char **argv) {
 		exit(3);
 	}
 
-   /* Como este c�digo � o c�digo de um servidor, o socket ser� um
-    * socket passivo. Para isto � necess�rio chamar a fun��o listen
-    * que define que este � um socket de servidor que ficar� esperando
-    * por conex�es nos endere�os definidos na fun��o bind. */
+
 	if (listen(listenfd, LISTENQ) == -1) {
 		perror("listen :(\n");
 		exit(4);
@@ -149,31 +139,15 @@ int main (int argc, char **argv) {
    printf("[Servidor no ar. Aguardando conexoes na porta %s]\n",argv[1]);
    printf("[Para finalizar, pressione CTRL+c ou rode um kill ou killall]\n");
    
-   /* O servidor no final das contas � um loop infinito de espera por
-    * conex�es e processamento de cada uma individualmente */
+
 	for (;;) {
-      /* O socket inicial que foi criado � o socket que vai aguardar
-       * pela conex�o na porta especificada. Mas pode ser que existam
-       * diversos clientes conectando no servidor. Por isso deve-se
-       * utilizar a fun��o accept. Esta fun��o vai retirar uma conex�o
-       * da fila de conex�es que foram aceitas no socket listenfd e
-       * vai criar um socket espec�fico para esta conex�o. O descritor
-       * deste novo socket � o retorno da fun��o accept. */
+ 
 		if ((connfd = accept(listenfd, (struct sockaddr *) NULL, NULL)) == -1 ) {
 			perror("accept :(\n");
 			exit(5);
 		}
       
-      /* Agora o servidor precisa tratar este cliente de forma
-       * separada. Para isto � criado um processo filho usando a
-       * fun��o fork. O processo vai ser uma c�pia deste. Depois da
-       * fun��o fork, os dois processos (pai e filho) estar�o no mesmo
-       * ponto do c�digo, mas cada um ter� um PID diferente. Assim �
-       * poss�vel diferenciar o que cada processo ter� que fazer. O
-       * filho tem que processar a requisi��o do cliente. O pai tem
-       * que voltar no loop para continuar aceitando novas conex�es */
-      /* Se o retorno da fun��o fork for zero, � porque est� no
-       * processo filho. */
+   
       if ( (childpid = fork()) == 0) {
          /**** PROCESSO FILHO ****/
          printf("[Uma conexao aberta]\n");
@@ -181,14 +155,7 @@ int main (int argc, char **argv) {
           * listenfd. S� o processo pai precisa deste socket. */
          close(listenfd);
          
-         /* Agora pode ler do socket e escrever no socket. Isto tem
-          * que ser feito em sincronia com o cliente. N�o faz sentido
-          * ler sem ter o que ler. Ou seja, neste caso est� sendo
-          * considerado que o cliente vai enviar algo para o servidor.
-          * O servidor vai processar o que tiver sido enviado e vai
-          * enviar uma resposta para o cliente (Que precisar� estar
-          * esperando por esta resposta) 
-          */
+
 
          /* ========================================================= */
          /* ========================================================= */
@@ -197,18 +164,33 @@ int main (int argc, char **argv) {
          /* ========================================================= */
          /* TODO: � esta parte do c�digo que ter� que ser modificada
           * para que este servidor consiga interpretar comandos IRC   */
-         /*-----Verifica nickname------*/
-         sprintf(entrada, "digite nickname:");
-         printf("%s\n",entrada);
-         write(connfd, entrada, strlen(entrada));
          
-         while (n = read(connfd, recvline, MAXLINE) > 0) {
-           recvline[n]=0;
-           if (check_pass(fila,recvline)) {
-            printf("USUARIO NAO EXISTE\n");
+
+         sprintf(entrada, "digite nickname:");
+         write(connfd, entrada, strlen(entrada));
+         /*-----Verifica nickname------*/
+         while ((n = read(connfd, recvline, MAXLINE)) > 0) {
+           recvline[n] = 0;
+           if (check_nick(fila_client,recvline) == 0) {
+              sprintf(entrada, "usuario nao existe\n");
+              write(connfd, entrada, strlen(entrada));
+              sprintf(entrada, "criando novo usuario: %s",recvline);
+              write(connfd, entrada, strlen(entrada));
+              fputs(recvline,client);
+              /*tira o caracter '\n' do recvline*/
+              len = strlen(recvline);
+              strncat (recvline, recvline, len - 1);
+              usleep(10);   
+              insert_client(fila_client,recvline);
+              usleep(10);   
+              break;
            }
          }
-         while ((n=read(connfd, recvline, MAXLINE)) > 0) {
+         /*-----------------------------*/
+         usleep(10);        
+
+         while ((n=read(connfd, recvline, MAXLINE)) > 0) { 
+            
             //flush hora
             hora = time( NULL );
             recvline[n]=0;
@@ -240,21 +222,16 @@ int main (int argc, char **argv) {
 
             /*Devolve a temperatura da cidade de São Paulo de acordo o site http://www.estacao.iag.usp.br/ */
 
-            if (strncmp(recvline, "MACTEMPERATURA", 14) == 0){
+            if (strncmp(recvline, "MACTEMPERATURA", 14) == 0) {
                getTemperatura(temp);
                sprintf(tempsp, "%s-http://www.estacao.iag.usp.br/\n",temp);
                write(connfd, tempsp, strlen(tempsp));
                for (x = 0; x < strlen(tempsp); x++)
                  data[x] = 0;
             }
-            
-            printf("[Cliente conectado no processo filho %d enviou:] ",getpid());
-            if ((fputs(recvline,stdout)) == EOF) {
-               perror("fputs :( \n");
-               exit(6);
-            }
-            
-            
+            usleep(10);
+            update_client(fila_client,client);
+            imprime_cliente(fila_client);
          }
          /* ========================================================= */
          /* ========================================================= */
@@ -274,6 +251,7 @@ int main (int argc, char **argv) {
 		close(connfd);
 	}
   fclose(file);
+  //fclose(client);
 	exit(0);
 }
 
@@ -282,9 +260,7 @@ void getTemperatura(char temp[]) {
     int x;
     for (x = 0; x < 7; x++) temp[x] = 0;
     FILE *file;
-    printf("dentro\n");
     system("GET http://www.estacao.iag.usp.br/ | grep \"temp\" > temp.txt");
-    printf("fora\n");
     file = fopen("temp.txt","r");
     fgets(http,28,file);
     strncat(temp, http + 19, 7);
@@ -292,23 +268,50 @@ void getTemperatura(char temp[]) {
     system("rm temp.txt");
 }
 
-void insert_client(node *p,char *pass,char *nick, char *server)
+void insert_client(node *p,char *nick)
 {
    node *nova;
    node *aux;
    nova = malloc (sizeof (node));
-   nova->pass   = pass;
    nova->nick = nick;
-   nova->server = server;
    for (aux = p; aux->prox != NULL; aux = aux->prox); 
    nova->prox = aux->prox;
    aux->prox = nova;
 }
 
-int check_pass(node *p, char *pass) {
+int check_nick(node *p, char *nick) {
   node *aux;
-  for (aux = p; aux->prox != NULL; aux->prox)
-    if (strcmp(pass, aux->pass) == 0)
+  for (aux = p; aux->prox != NULL; aux->prox) {
+    if (strcmp(nick, aux->nick) == 0)
       return 1;
+  }
   return 0;  
+}
+
+void imprime_cliente(node *p) {
+  node *aux;
+  int x = 0;
+  for (aux = p->prox; aux != NULL; aux = aux->prox) {
+    x++;
+    printf("%s\n",aux->nick);
+  }
+  printf("%d\n",x);
+}
+
+void update_client(node *p, FILE *client) {
+  char *nick;
+  int len;
+  while(fgets(nick, 18, client) != NULL) {
+        /*tira nova linha '\n'*/
+        printf("%d\n", len);
+        len = strlen(nick);
+        strncat (nick, nick, len - 1);
+        printf("%d\n", strlen(nick) );
+        if (check_nick(p,nick) == 0) {
+          printf("nao achei\n");
+          insert_client(p,nick);
+          printf("update feito\n");
+        }
+  }
+
 }
