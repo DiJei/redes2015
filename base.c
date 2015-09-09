@@ -44,7 +44,26 @@
 #define MAXDATASIZE 100
 #define MAXLINE 4096
 
+
+ /*Estrutura que vai ser usada para armazenar clientes*/
+struct no {
+   char *pass;;  //Tamanho imposto por esta implementacao
+   char *nick;   //Tamanho maximo descrito no protocolo
+   char *user;   //Tamanho imposto por esta implementacao
+   char *server; //Servidor que o cliente esta conectado
+   struct no *prox;
+};
+typedef struct no node;
+/*----------------------------------------------------*/
+
+
+void insert_client(node *p,char *pass,char *nick, char *server);
+int check_nick(node *p, char *pass);
 void getTemperatura(char temp[]);
+
+
+
+
 
 int main (int argc, char **argv) {
    /* Os sockets. Um que ser� o socket que vai escutar pelas conex�es
@@ -65,7 +84,7 @@ int main (int argc, char **argv) {
    time_t hora;
    struct tm *tm_p;
    /*----------------------------*/
-
+ 
    int x;
    char data[13];
    char hour[14];
@@ -75,6 +94,13 @@ int main (int argc, char **argv) {
    char tempsp[39];
    char http[28];
    //------------
+
+   /*Fila de usuarios*/
+   node *fila;
+   fila = malloc(sizeof(node));
+   fila->prox = NULL;
+   char entrada[30];
+
   if (argc != 2) {
       fprintf(stderr,"Uso: %s <Porta>\n",argv[0]);
       fprintf(stderr,"Vai rodar um servidor de echo na porta <Porta> TCP\n");
@@ -171,12 +197,24 @@ int main (int argc, char **argv) {
          /* ========================================================= */
          /* TODO: � esta parte do c�digo que ter� que ser modificada
           * para que este servidor consiga interpretar comandos IRC   */
+         /*-----Verifica nickname------*/
+         sprintf(entrada, "digite nickname:");
+         printf("%s\n",entrada);
+         write(connfd, entrada, strlen(entrada));
+         
+         while (n = read(connfd, recvline, MAXLINE) > 0) {
+           recvline[n]=0;
+           if (check_pass(fila,recvline)) {
+            printf("USUARIO NAO EXISTE\n");
+           }
+         }
          while ((n=read(connfd, recvline, MAXLINE)) > 0) {
             //flush hora
             hora = time( NULL );
             recvline[n]=0;
-            
-            
+
+
+
             /*Deolve hora, estamos usando srtncmp pois existe um \n 
             no final de recvline                                 */
             if (strncmp(recvline, "MACHORA", 7) == 0) {
@@ -203,27 +241,11 @@ int main (int argc, char **argv) {
             /*Devolve a temperatura da cidade de São Paulo de acordo o site http://www.estacao.iag.usp.br/ */
 
             if (strncmp(recvline, "MACTEMPERATURA", 14) == 0){
-          
-               
                getTemperatura(temp);
                sprintf(tempsp, "%s-http://www.estacao.iag.usp.br/\n",temp);
                write(connfd, tempsp, strlen(tempsp));
                for (x = 0; x < strlen(tempsp); x++)
                  data[x] = 0;
-               
-                
-                /*
-                system("GET http://www.estacao.iag.usp.br/ | grep \"temp\" > temp.txt");
-                printf("foi\n");
-                file = fopen("temp.txt","r");
-                printf("foi\n");
-                fgets(http,28,file);
-                printf("foi\n");
-                strncat(temp, http + 19, 7);
-                printf("foi\n");
-                write(connfd, http, strlen(http));
-                printf("foi\n");
-                */
             }
             
             printf("[Cliente conectado no processo filho %d enviou:] ",getpid());
@@ -260,10 +282,33 @@ void getTemperatura(char temp[]) {
     int x;
     for (x = 0; x < 7; x++) temp[x] = 0;
     FILE *file;
+    printf("dentro\n");
     system("GET http://www.estacao.iag.usp.br/ | grep \"temp\" > temp.txt");
+    printf("fora\n");
     file = fopen("temp.txt","r");
     fgets(http,28,file);
     strncat(temp, http + 19, 7);
     fclose(file);
     system("rm temp.txt");
+}
+
+void insert_client(node *p,char *pass,char *nick, char *server)
+{
+   node *nova;
+   node *aux;
+   nova = malloc (sizeof (node));
+   nova->pass   = pass;
+   nova->nick = nick;
+   nova->server = server;
+   for (aux = p; aux->prox != NULL; aux = aux->prox); 
+   nova->prox = aux->prox;
+   aux->prox = nova;
+}
+
+int check_pass(node *p, char *pass) {
+  node *aux;
+  for (aux = p; aux->prox != NULL; aux->prox)
+    if (strcmp(pass, aux->pass) == 0)
+      return 1;
+  return 0;  
 }
