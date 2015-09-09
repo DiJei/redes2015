@@ -62,7 +62,7 @@ int check_nick(node *p, char *nick);
 void getTemperatura(char temp[]);
 void imprime_cliente(node *p);
 void update_client(node *p, FILE *client);
-
+void get_nick(char *line, char nick[]);
 
 
 
@@ -75,7 +75,7 @@ int main (int argc, char **argv) {
    /* Retorno da fun��o fork para saber quem � o processo filho e quem
     * � o processo pai */
    pid_t childpid;
-   
+
    /* Armazena linhas recebidas do cliente */
 	char	recvline[MAXLINE + 1];
    /* Armazena o tamanho da string lida do cliente */
@@ -103,6 +103,7 @@ int main (int argc, char **argv) {
    fila_client = malloc(sizeof(node));
    fila_client->prox = NULL;
    char entrada[30];
+   char nick[10];
    int len;
   if (argc != 2) {
       fprintf(stderr,"Uso: %s <Porta>\n",argv[0]);
@@ -164,36 +165,23 @@ int main (int argc, char **argv) {
          /* ========================================================= */
          /* TODO: � esta parte do c�digo que ter� que ser modificada
           * para que este servidor consiga interpretar comandos IRC   */
-         
-
-         sprintf(entrada, "digite nickname:");
-         write(connfd, entrada, strlen(entrada));
-         /*-----Verifica nickname------*/
-         while ((n = read(connfd, recvline, MAXLINE)) > 0) {
-           recvline[n] = 0;
-           if (check_nick(fila_client,recvline) == 0) {
-              sprintf(entrada, "usuario nao existe\n");
-              write(connfd, entrada, strlen(entrada));
-              sprintf(entrada, "criando novo usuario: %s",recvline);
-              write(connfd, entrada, strlen(entrada));
-              fputs(recvline,client);
-              /*tira o caracter '\n' do recvline*/
-              len = strlen(recvline);
-              strncat (recvline, recvline, len - 1);
-              usleep(10);   
-              insert_client(fila_client,recvline);
-              usleep(10);   
-              break;
-           }
-         }
-         /*-----------------------------*/
-         usleep(10);        
+                
 
          while ((n=read(connfd, recvline, MAXLINE)) > 0) { 
             
             //flush hora
             hora = time( NULL );
             recvline[n]=0;
+            
+            if (strncmp(recvline,"NICK",4) == 0) {
+              get_nick(recvline,nick);
+              if (check_nick(fila_client,nick) == 0) {
+                sprintf(entrada, "criando novo usuario: %s",nick);
+                write(connfd, entrada, strlen(entrada));
+                fputs(nick,client);   
+                insert_client(fila_client,nick);
+              }
+           }
 
 
 
@@ -230,8 +218,8 @@ int main (int argc, char **argv) {
                  data[x] = 0;
             }
             usleep(10);
-            update_client(fila_client,client);
-            imprime_cliente(fila_client);
+            //update_client(fila_client,client);
+            //imprime_cliente(fila_client);
          }
          /* ========================================================= */
          /* ========================================================= */
@@ -303,15 +291,21 @@ void update_client(node *p, FILE *client) {
   int len;
   while(fgets(nick, 18, client) != NULL) {
         /*tira nova linha '\n'*/
-        printf("%d\n", len);
         len = strlen(nick);
         strncat (nick, nick, len - 1);
-        printf("%d\n", strlen(nick) );
         if (check_nick(p,nick) == 0) {
-          printf("nao achei\n");
           insert_client(p,nick);
-          printf("update feito\n");
         }
   }
 
+}
+
+void get_nick(char *line, char nick[]) {
+  int x;
+  int y = 0;
+  for (x = 5; line[x] != '\n';x++) {
+     nick[y] = line[x];
+      y++;
+  }  
+  nick[y + 1] = 0;
 }
