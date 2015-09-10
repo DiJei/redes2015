@@ -176,7 +176,7 @@ int main (int argc, char **argv) {
             if (strncmp(recvline,"NICK",4) == 0) {
               get_nick(recvline,nick);
               if (check_nick(fila_client,nick) == 0) {
-                sprintf(entrada, "criando novo usuario: %s",nick);
+                sprintf(entrada, "criando novo usuario: %s\n",nick);
                 write(connfd, entrada, strlen(entrada));
                 fputs(nick,client);   
                 insert_client(fila_client,nick);
@@ -218,7 +218,7 @@ int main (int argc, char **argv) {
                  data[x] = 0;
             }
             usleep(10);
-            //update_client(fila_client,client);
+            update_client(fila_client,client);
             //imprime_cliente(fila_client);
          }
          /* ========================================================= */
@@ -269,21 +269,20 @@ void insert_client(node *p,char *nick)
 
 int check_nick(node *p, char *nick) {
   node *aux;
-  for (aux = p; aux->prox != NULL; aux->prox) {
-    if (strcmp(nick, aux->nick) == 0)
+  for (aux = p->prox; aux != NULL; aux->prox) {
+    if (strcmp(nick, aux->nick) == 0) {
+      printf("----[%s] == [%s]----\n",nick,aux->nick);
       return 1;
+    }
   }
   return 0;  
 }
 
 void imprime_cliente(node *p) {
   node *aux;
-  int x = 0;
   for (aux = p->prox; aux != NULL; aux = aux->prox) {
-    x++;
     printf("%s\n",aux->nick);
   }
-  printf("%d\n",x);
 }
 
 void update_client(node *p, FILE *client) {
