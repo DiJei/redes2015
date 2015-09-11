@@ -47,10 +47,7 @@
 
  /*Estrutura que vai ser usada para armazenar clientes*/
 struct no {
-   char *pass;  //Tamanho imposto por esta implementacao
    char *nick;   //Tamanho maximo descrito no protocolo
-   char *user;   //Tamanho imposto por esta implementacao
-   char *server; //Servidor que o cliente esta conectado
    struct no *prox;
 };
 typedef struct no node;
@@ -181,8 +178,27 @@ int main (int argc, char **argv) {
 
             if (strncmp(recvline,"LIST",4) == 0) {
                file = fopen("channels.txt", "r+");
+               answer = "#global\n";
+               write(connfd, answer, strlen(answer));
+               answer = "#private\n";
+               write(connfd, answer, strlen(answer));
             }
-            
+
+            if (strncmp(recvline,"JOIN",4) == 0) {
+                get_nick(recvline,nick);
+                printf("%s\n",nick);
+                if (strncmp(nick,"#global",7) == 1){
+                    printf("JOIN GLOBAL\n");
+                }
+                if (strncmp(nick,"#private",8) == 1){
+                  printf("JOIN PRIVATE\n");
+                }
+                else {
+                  answer = "ERR_NOSUCHCHANNEL\n";
+                  write(connfd, answer, strlen(answer)); 
+                }
+            } 
+          
             if (strncmp(recvline,"NICK",4) == 0) {
               get_nick(recvline,nick);
               if (check_nick(nick) == 1) {
@@ -285,15 +301,16 @@ int check_nick(char *nick) {
    f = fopen("nicks.txt", "r");
 
    for (i = 0; i < 10; i++)
-       comp[i] = '\0';
-   if (f != NULL) {
-     while (fgets(comp, 10, f) != NULL) {
+       comp[i] = 0;
+   if (f != NULL) {   
+
+      while (fgets(comp, 10, f) != NULL) {
          if (strncmp(comp, nick, 10) == 0) {
              fclose(f);
              return 1;
-        }
+          }
       }
-   }
+  }
    fclose(f);
    return 0;
 }
