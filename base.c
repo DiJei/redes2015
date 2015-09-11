@@ -47,7 +47,7 @@
 
  /*Estrutura que vai ser usada para armazenar clientes*/
 struct no {
-   char *pass;;  //Tamanho imposto por esta implementacao
+   char *pass;  //Tamanho imposto por esta implementacao
    char *nick;   //Tamanho maximo descrito no protocolo
    char *user;   //Tamanho imposto por esta implementacao
    char *server; //Servidor que o cliente esta conectado
@@ -57,8 +57,8 @@ typedef struct no node;
 /*----------------------------------------------------*/
 
 
-void insert_client(node *p,char *nick);
-int check_nick(node *p, char *nick);
+void insert_client(char *nick);
+int check_nick(char *nick);
 void getTemperatura(char temp[]);
 void imprime_cliente(node *p);
 void update_client(node *p, FILE *client);
@@ -98,23 +98,29 @@ int main (int argc, char **argv) {
    //------------
    
    FILE *client;
+   char* answer;
    /*Fila de usuarios*/
    node *fila_client;
    fila_client = malloc(sizeof(node));
    fila_client->prox = NULL;
    char entrada[30];
    char nick[10];
-   int len;
+   int lenfile;
+
+   /* Inicialização de estruturas */
+
+   file = fopen("channels.txt", "w+");
+   fclose(file);
+   file = fopen("nicks.txt", "w+");
+   fclose(file);
+
   if (argc != 2) {
       fprintf(stderr,"Uso: %s <Porta>\n",argv[0]);
       fprintf(stderr,"Vai rodar um servidor de echo na porta <Porta> TCP\n");
 		exit(1);
 	}
   
-
   /*Cria arquivo com informacoes com clientes*/
-  client = fopen("cliente_log.txt","w");
-
   
 	if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
 		perror("socket :(\n");
@@ -172,18 +178,25 @@ int main (int argc, char **argv) {
             //flush hora
             hora = time( NULL );
             recvline[n]=0;
+
+            if (strncmp(recvline,"LIST",4) == 0) {
+               file = fopen("channels.txt", "r+");
+            }
             
             if (strncmp(recvline,"NICK",4) == 0) {
               get_nick(recvline,nick);
-              if (check_nick(fila_client,nick) == 0) {
-                sprintf(entrada, "criando novo usuario: %s\n",nick);
-                write(connfd, entrada, strlen(entrada));
-                fputs(nick,client);   
-                insert_client(fila_client,nick);
+              if (check_nick(nick) == 1) {
+                  answer = "433 ERR_NICKNAMEINUSE\0";
+                  write(connfd, answer, strlen(answer));
               }
-           }
-
-
+              else {
+                  insert_client(nick);
+                  answer = "Good :) \n\0";
+                  write(connfd, answer, strlen(answer));
+              }
+              for (x = 0; x < 10; x++)
+                  nick[x] = 0;
+            }
 
             /*Deolve hora, estamos usando srtncmp pois existe um \n 
             no final de recvline                                 */
@@ -217,9 +230,11 @@ int main (int argc, char **argv) {
                for (x = 0; x < strlen(tempsp); x++)
                  data[x] = 0;
             }
-            usleep(10);
-            update_client(fila_client,client);
-            //imprime_cliente(fila_client);
+
+            if (strncmp(recvline, "QUIT", 4) == 0) {
+                break;
+            }
+
          }
          /* ========================================================= */
          /* ========================================================= */
@@ -244,7 +259,7 @@ int main (int argc, char **argv) {
 }
 
 void getTemperatura(char temp[]) {
-  char http[28];
+    char http[28];
     int x;
     for (x = 0; x < 7; x++) temp[x] = 0;
     FILE *file;
@@ -256,26 +271,31 @@ void getTemperatura(char temp[]) {
     system("rm temp.txt");
 }
 
-void insert_client(node *p,char *nick)
-{
-   node *nova;
-   node *aux;
-   nova = malloc (sizeof (node));
-   nova->nick = nick;
-   for (aux = p; aux->prox != NULL; aux = aux->prox); 
-   nova->prox = aux->prox;
-   aux->prox = nova;
+void insert_client(char *nick) {
+    FILE *f = fopen("nicks.txt", "a");
+    fputs(nick, f);
+    fputs("\0", f);
+    fclose(f);
 }
 
-int check_nick(node *p, char *nick) {
-  node *aux;
-  for (aux = p->prox; aux != NULL; aux->prox) {
-    if (strcmp(nick, aux->nick) == 0) {
-      printf("----[%s] == [%s]----\n",nick,aux->nick);
-      return 1;
-    }
-  }
-  return 0;  
+int check_nick(char *nick) {
+   FILE *f;
+   int i;
+   char comp[10];
+   f = fopen("nicks.txt", "r");
+
+   for (i = 0; i < 10; i++)
+       comp[i] = '\0';
+   if (f != NULL) {
+     while (fgets(comp, 10, f) != NULL) {
+         if (strncmp(comp, nick, 10) == 0) {
+             fclose(f);
+             return 1;
+        }
+      }
+   }
+   fclose(f);
+   return 0;
 }
 
 void imprime_cliente(node *p) {
@@ -286,16 +306,6 @@ void imprime_cliente(node *p) {
 }
 
 void update_client(node *p, FILE *client) {
-  char *nick;
-  int len;
-  while(fgets(nick, 18, client) != NULL) {
-        /*tira nova linha '\n'*/
-        len = strlen(nick);
-        strncat (nick, nick, len - 1);
-        if (check_nick(p,nick) == 0) {
-          insert_client(p,nick);
-        }
-  }
 
 }
 
